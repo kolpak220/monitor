@@ -58,7 +58,7 @@ The wizard accepts no proxy, SOCKS5 or HTTP. The selected proxy is passed to bot
 | Command | Description |
 |---|---|
 | /start | Open the dashboard |
-| /add @username [user|channel] | Add a personal account, channel or supergroup username. Omit the type to monitor either type. |
+| /add @username [type] | Add a personal account, channel or supergroup username. Type can be user, channel or both; omit it to monitor either type. |
 | /remove @username | Remove a target and its retained history |
 | /list | List monitored usernames |
 | /check @username | Queue an immediate check |
