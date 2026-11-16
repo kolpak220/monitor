@@ -19,7 +19,9 @@ python main.py
 
 **Pyrogram compatibility note:** this project intentionally uses official Pyrogram 2.0.106. The upstream project is archived and no longer maintained, so Telegram API changes may eventually break login or MTProto requests.
 
-The setup wizard creates `.env`, validates the bot token, and logs in the Telegram user account once. On later runs press Enter to keep saved settings and reuse the session. Keep the terminal open; stop with Ctrl+C and restart with `python main.py`.
+The setup wizard creates `.env`, validates the bot token directly (without the MTProto proxy), and starts the Pyrogram user client. On the first run, Pyrogram handles Telegram's interactive phone/code/two-step-password login and saves `data/userbot.session`. On later runs, press Enter to reuse that session. Keep the terminal open; stop with Ctrl+C and restart with `python main.py`.
+
+The optional proxy is applied only to the Pyrogram MTProto user client. Bot API polling and token validation connect directly. This matches the separation used by the reference project.
 
 ## What it does
 
@@ -47,4 +49,4 @@ Only the numeric ID in `ADMIN_USER_IDS` can use the bot. Open the bot and send `
 - `data/userbot.session`: logged-in Telegram session; treat it like a password.
 - `data/monitor.sqlite3`: SQLite database; back up this file to preserve targets and history.
 
-Optional proxy supports SOCKS5 or HTTP and is shared by the MTProto user client and Bot API client. Leave proxy type as `none` to connect directly.
+Optional proxy supports SOCKS5 or HTTP for the MTProto user client only. The Bot API connects directly. Leave proxy type as `none` to connect directly.
