@@ -25,24 +25,40 @@ def ask(label, key, saved, secret=False, default=""):
     return entered or value
 
 
+def code_type_name(value):
+    if value is None:
+        return None
+    return getattr(value, "__name__", type(value).__name__)
+
+
 def explain_code_delivery(sent):
-    delivery = type(sent.type).__name__
+    delivery = code_type_name(sent.type)
     descriptions = {
-        "SentCodeTypeApp": "Telegram app (check the verified Telegram service chat on an already logged-in device)",
+        "SentCodeTypeApp": "Telegram app on another logged-in device",
         "SentCodeTypeSms": "SMS text message",
         "SentCodeTypeCall": "automated phone call",
-        "SentCodeTypeFlashCall": "missed-call verification",
+        "SentCodeTypeFlashCall": "flash-call verification",
         "SentCodeTypeMissedCall": "missed-call verification",
         "SentCodeTypeFragmentSms": "Fragment SMS",
         "SentCodeTypeFirebaseSms": "SMS verification",
+        "SentCodeTypeEmailCode": "your configured login email",
+        "SentCodeTypeSetUpEmailRequired": "Telegram requires an email setup step",
     }
     print("\nTelegram accepted the login request.")
-    print("Code delivery: " + descriptions.get(delivery, delivery))
-    if getattr(sent, "next_type", None):
-        print("Telegram may offer another delivery method after the current attempt.")
+    print("Requested delivery method: " + descriptions.get(delivery, delivery or "unknown"))
+    if delivery == "SentCodeTypeApp":
+        print("Important: this is Telegram's intended route, not proof the message was delivered.")
+        print("Check the verified Telegram service chat on every device where you're logged in.")
+    next_type = code_type_name(getattr(sent, "next_type", None))
+    if next_type:
+        print("Next available method: " + descriptions.get(next_type, next_type))
+        timeout = getattr(sent, "timeout", None)
+        if timeout:
+            print(f"Telegram says to wait approximately {timeout} seconds before requesting it.")
+    else:
+        print("Telegram did not provide another delivery method for this request.")
     print("The code comes from Telegram itself, NOT from this bot.")
-    print("If no code arrives, check Telegram's service messages on your other devices.")
-    print("You can type 'resend' at the code prompt to request another code.\n")
+    print("Do not guess the code or repeatedly request resends.\n")
 
 
 async def request_new_code(client, phone, phone_code_hash):
