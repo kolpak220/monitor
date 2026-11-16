@@ -11,7 +11,7 @@ from aiogram import Bot
 from aiogram.client.session.aiohttp import AiohttpSession
 from dotenv import dotenv_values
 from pyrogram import Client
-from pyrogram.errors import SessionPasswordNeeded
+from pyrogram.errors import PhoneCodeExpired, PhoneCodeInvalid, SessionPasswordNeeded
 
 ROOT = Path(__file__).resolve().parent
 ENV_FILE = ROOT / ".env"
@@ -23,6 +23,26 @@ def ask(label, key, saved, secret=False, default=""):
     hint = " [saved]" if secret and value else (f" [{value}]" if value else "")
     entered = input(f"{label}{hint}: ").strip()
     return entered or value
+
+
+def explain_code_delivery(sent):
+    delivery = type(sent.type).__name__
+    descriptions = {
+        "SentCodeTypeApp": "Telegram app (check the verified Telegram service chat on an already logged-in device)",
+        "SentCodeTypeSms": "SMS text message",
+        "SentCodeTypeCall": "automated phone call",
+        "SentCodeTypeFlashCall": "missed-call verification",
+        "SentCodeTypeMissedCall": "missed-call verification",
+        "SentCodeTypeFragmentSms": "Fragment SMS",
+        "SentCodeTypeFirebaseSms": "SMS verification",
+    }
+    print("\\nTelegram accepted the login request.")
+    print("Code delivery: " + descriptions.get(delivery, delivery))
+    if getattr(sent, "next_type", None):
+        print("Telegram may offer another delivery method after the current attempt.")
+    print("The code comes from Telegram itself, NOT from this bot.")
+    print("If no code arrives, check Telegram's service messages on your other devices.")
+    print("You can type 'resend' at the code prompt to request another code.\\n")
 
 
 async def main():
@@ -80,11 +100,28 @@ async def main():
             await client.connect()
             connected = True
             sent = await client.send_code(phone)
-            code = input("Telegram login code: ").strip()
-            try:
-                await client.sign_in(phone, sent.phone_code_hash, code)
-            except SessionPasswordNeeded:
-                await client.check_password(input("Telegram 2FA password: "))
+            explain_code_delivery(sent)
+            while True:
+                code = input("Code from Telegram (or 'resend'): ").strip()
+                if not code:
+                    print("Enter the code Telegram sent, or type 'resend'.")
+                    continue
+                if code.lower() == "resend":
+                    sent = await client.resend_code(phone, sent.phone_code_hash)
+                    explain_code_delivery(sent)
+                    continue
+                try:
+                    await client.sign_in(phone, sent.phone_code_hash, code)
+                    break
+                except PhoneCodeInvalid:
+                    print("Telegram rejected that code. Check the latest message and try again.")
+                except PhoneCodeExpired:
+                    print("That code expired. Requesting a fresh one...")
+                    sent = await client.resend_code(phone, sent.phone_code_hash)
+                    explain_code_delivery(sent)
+                except SessionPasswordNeeded:
+                    await client.check_password(input("Telegram two-step verification password: "))
+                    break
             me = await client.get_me()
             print(f"Authorized user account: @{me.username or me.id}")
         finally:
