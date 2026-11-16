@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import getpass
 import json
 import os
 import re
@@ -25,7 +24,7 @@ def ask(prompt: str, default: str = "") -> str:
 
 
 def ask_secret(prompt: str) -> str:
-    return getpass.getpass(f"{prompt}: ").strip()
+    return input(f"{prompt}: ").strip()
 
 
 def _dotenv_value(value: str) -> str:
