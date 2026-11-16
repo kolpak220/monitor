@@ -11,7 +11,7 @@ from aiogram import Bot
 from aiogram.client.session.aiohttp import AiohttpSession
 from dotenv import dotenv_values
 from pyrogram import Client
-from pyrogram.errors import PhoneCodeExpired, PhoneCodeInvalid, SendCodeUnavailable, SessionPasswordNeeded
+from pyrogram.errors import PhoneCodeExpired, PhoneCodeInvalid, RPCError, SessionPasswordNeeded
 
 ROOT = Path(__file__).resolve().parent
 ENV_FILE = ROOT / ".env"
@@ -64,7 +64,9 @@ def explain_code_delivery(sent):
 async def request_new_code(client, phone, phone_code_hash):
     try:
         return await client.resend_code(phone, phone_code_hash)
-    except SendCodeUnavailable:
+    except RPCError as exc:
+        if getattr(exc, "ID", "") != "SEND_CODE_UNAVAILABLE":
+            raise
         raise SystemExit(
             "Telegram has no more code-delivery options available for this login attempt. "
             "Stop retrying, check Telegram on an already logged-in device, wait before "
