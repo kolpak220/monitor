@@ -17,7 +17,7 @@ python setup.py
 python main.py
 ~~~
 
-The setup wizard creates `.env`, validates the bot token, and logs in the Telegram user account once. On later runs press Enter to keep saved settings and reuse the session. Keep the terminal open; stop with Ctrl+C and restart with `python main.py`.
+**Pyrogram compatibility note:** this project intentionally uses official Pyrogram 2.0.106. The upstream project is archived and no longer maintained, so Telegram API changes may eventually break login or MTProto requests.\n\nThe setup wizard creates `.env`, validates the bot token, and logs in the Telegram user account once. On later runs press Enter to keep saved settings and reuse the session. Keep the terminal open; stop with Ctrl+C and restart with `python main.py`.
 
 ## What it does
 
