@@ -228,7 +228,7 @@ async def check_one(client, bot, target):
             try:
                 await bot.send_message(admin_id, claim_message)
             except Exception:
-                log.exception("Auto-claim notification to admin %s failed")
+                log.exception("Auto-claim notification to admin %s failed", admin_id)
 
     notifyable = {"occupied", "apparently_available", "collectible", "invalid"}
     if result in notifyable and result != target["last_status"]:
