@@ -8,7 +8,6 @@ import sqlite3
 import time
 from contextlib import contextmanager
 from pathlib import Path
-from urllib.parse import quote
 
 from aiogram import Bot, Dispatcher
 from aiogram.client.session.aiohttp import AiohttpSession
@@ -51,12 +50,10 @@ def proxy_config():
     if not host or not port.isdigit() or not 1 <= int(port) <= 65535:
         raise RuntimeError("Invalid PROXY_HOST/PROXY_PORT.")
     user, password = env("PROXY_USERNAME"), os.getenv("PROXY_PASSWORD", "")
-    auth = f"{quote(user, safe='')}:{quote(password, safe='')}@" if user else ""
-    url = f"{kind}://{auth}{host}:{port}"
     raw = {"scheme": kind, "hostname": host, "port": int(port)}
     if user:
         raw.update(username=user, password=password)
-    return url, raw
+    return raw
 
 
 @contextmanager
@@ -373,7 +370,7 @@ async def main():
     token, api_id, api_hash = env("BOT_TOKEN"), env("TELEGRAM_API_ID"), env("TELEGRAM_API_HASH")
     if not token or not api_id.isdigit() or not api_hash or not admins():
         raise RuntimeError("Configuration missing. Run python setup.py first.")
-    _, proxy = proxy_config()
+    proxy = proxy_config()
     if not (DATA / "userbot.session").exists():
         raise RuntimeError("Telegram user session missing. Run python setup.py first.")
     default_interval = max(10, int(env("DEFAULT_INTERVAL_SECONDS", "60")))
