@@ -4,10 +4,10 @@ A single-process local Python app. **No Docker, PostgreSQL, Redis, Alembic, or c
 
 ## Windows 10/11 setup
 
-Install Python 3.11+ and run in PowerShell from this folder:
+Install Python 3.13 and run in PowerShell from this folder. The project uses official Pyrogram (not Kurigram).
 
 ~~~powershell
-py -3.12 -m venv .venv
+py -3.13 -m venv .venv
 .\\.venv\\Scripts\\Activate.ps1
 python -m pip install --upgrade pip
 pip install -r requirements.txt
