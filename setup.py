@@ -11,7 +11,7 @@ from aiogram import Bot
 from aiogram.client.session.aiohttp import AiohttpSession
 from dotenv import dotenv_values
 from pyrogram import Client
-from pyrogram.errors import PhoneCodeExpired, PhoneCodeInvalid, SessionPasswordNeeded
+from pyrogram.errors import PhoneCodeExpired, PhoneCodeInvalid, SendCodeUnavailable, SessionPasswordNeeded
 
 ROOT = Path(__file__).resolve().parent
 ENV_FILE = ROOT / ".env"
@@ -43,6 +43,17 @@ def explain_code_delivery(sent):
     print("The code comes from Telegram itself, NOT from this bot.")
     print("If no code arrives, check Telegram's service messages on your other devices.")
     print("You can type 'resend' at the code prompt to request another code.\n")
+
+
+async def request_new_code(client, phone, phone_code_hash):
+    try:
+        return await client.resend_code(phone, phone_code_hash)
+    except SendCodeUnavailable:
+        raise SystemExit(
+            "Telegram has no more code-delivery options available for this login attempt. "
+            "Stop retrying, check Telegram on an already logged-in device, wait before "
+            "starting a new login attempt, and do not keep requesting resends."
+        )
 
 
 async def main():
@@ -107,7 +118,7 @@ async def main():
                     print("Enter the code Telegram sent, or type 'resend'.")
                     continue
                 if code.lower() == "resend":
-                    sent = await client.resend_code(phone, sent.phone_code_hash)
+                    sent = await request_new_code(client, phone, sent.phone_code_hash)
                     explain_code_delivery(sent)
                     continue
                 try:
