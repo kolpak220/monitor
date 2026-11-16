@@ -80,7 +80,9 @@ def init_database():
             id INTEGER PRIMARY KEY, username TEXT NOT NULL UNIQUE COLLATE NOCASE,
             target_type TEXT NOT NULL DEFAULT 'both', interval_seconds INTEGER NOT NULL DEFAULT 60,
             enabled INTEGER NOT NULL DEFAULT 1, last_status TEXT, last_checked REAL,
-            next_check REAL NOT NULL DEFAULT 0, created_at REAL NOT NULL
+            next_check REAL NOT NULL DEFAULT 0, created_at REAL NOT NULL,
+            auto_claim INTEGER NOT NULL DEFAULT 0,
+            claim_attempted INTEGER NOT NULL DEFAULT 0
         );
         CREATE TABLE IF NOT EXISTS checks (
             id INTEGER PRIMARY KEY, target_id INTEGER NOT NULL REFERENCES targets(id) ON DELETE CASCADE,
@@ -90,6 +92,11 @@ def init_database():
         CREATE INDEX IF NOT EXISTS checks_target_time ON checks(target_id, checked_at DESC);
         CREATE INDEX IF NOT EXISTS targets_due ON targets(enabled, next_check);
         """)
+        columns = {row["name"] for row in con.execute("PRAGMA table_info(targets)")}
+        if "auto_claim" not in columns:
+            con.execute("ALTER TABLE targets ADD COLUMN auto_claim INTEGER NOT NULL DEFAULT 0")
+        if "claim_attempted" not in columns:
+            con.execute("ALTER TABLE targets ADD COLUMN claim_attempted INTEGER NOT NULL DEFAULT 0")
 
 
 def username_arg(value):
@@ -203,6 +210,26 @@ async def check_one(client, bot, target):
                     (target["id"], target["id"]))
     log.info("@%s: %s", name, result)
 
+    # One-shot opt-in claim; mark first to prevent duplicate channels after a restart.
+    if result == "apparently_available" and target["auto_claim"] and not target["claim_attempted"]:
+        with database() as con:
+            con.execute("UPDATE targets SET claim_attempted=1 WHERE id=?", (target["id"],))
+        try:
+            channel = await client.create_channel(name, f"Channel created for @{name}.")
+            assigned = await client.set_chat_username(channel.id, name)
+            if assigned:
+                claim_message = f"Auto-claim succeeded: https://t.me/{name}\nChannel ID: {channel.id}"
+            else:
+                claim_message = f"Channel created (ID {channel.id}), but Telegram did not confirm @{name} assignment."
+        except Exception as exc:
+            claim_message = f"Auto-claim failed for @{name}: {type(exc).__name__}: {exc}"
+            log.exception("Auto-claim failed for @%s", name)
+        for admin_id in admins():
+            try:
+                await bot.send_message(admin_id, claim_message)
+            except Exception:
+                log.exception("Auto-claim notification to admin %s failed")
+
     notifyable = {"occupied", "apparently_available", "collectible", "invalid"}
     if result in notifyable and result != target["last_status"]:
         for admin_id in admins():
@@ -245,6 +272,7 @@ def register_handlers(dp, default_interval):
             "Username Monitor\n\n"
             "/add @name [user|channel|both]\n/remove @name\n/list\n"
             "/check @name\n/pause @name\n/resume @name\n"
+            "/autoclaim @name\n/stopclaim @name\n"
             "/interval @name seconds\n/history @name [count]\n/settings\n/status"
         )
 
@@ -290,7 +318,7 @@ def register_handlers(dp, default_interval):
             rows = con.execute("SELECT * FROM targets ORDER BY username").fetchall()
         if not rows:
             return await message.answer("No targets. Add one with /add @username.")
-        lines = [f"• @{r['username']} — {'active' if r['enabled'] else 'paused'} — {status_label(r['last_status'])} — {r['interval_seconds']}s" for r in rows]
+        lines = [f"• @{r['username']} — {'active' if r['enabled'] else 'paused'} — {status_label(r['last_status'])} — {r['interval_seconds']}s — " + ("auto-claim attempted" if r["claim_attempted"] else "auto-claim armed" if r["auto_claim"] else "auto-claim off") for r in rows]
         await message.answer("Monitored usernames:\n" + "\n".join(lines))
 
     @dp.message(Command("pause", "resume", "check"))
@@ -314,6 +342,34 @@ def register_handlers(dp, default_interval):
         if not row:
             return await message.answer(f"@{name} is not monitored.")
         await message.answer(f"Queued check for @{name}." if command == "/check" else f"@{name} {'resumed' if command == '/resume' else 'paused'}.")
+
+    @dp.message(Command("autoclaim", "stopclaim"))
+    @protected
+    async def auto_claim(message):
+        parts = (message.text or "").split()
+        command = parts[0].split("@")[0].lower()
+        if len(parts) != 2:
+            return await message.answer(f"Usage: {command} @username")
+        try:
+            name = username_arg(parts[1])
+        except ValueError as exc:
+            return await message.answer(str(exc))
+        enabled = command == "/autoclaim"
+        with database() as con:
+            cur = con.execute(
+                "UPDATE targets SET auto_claim=?,claim_attempted=0 WHERE username=?",
+                (int(enabled), name),
+            )
+        if not cur.rowcount:
+            return await message.answer(f"@{name} is not monitored. Add it first with /add.")
+        if enabled:
+            await message.answer(
+                f"Auto-claim armed for @{name}. If Telegram reports it apparently available, "
+                "the user account will create a channel titled with the username and try to assign it. "
+                "This is a one-shot attempt; Telegram may still reject the assignment."
+            )
+        else:
+            await message.answer(f"Auto-claim disabled for @{name}.")
 
     @dp.message(Command("interval"))
     @protected
