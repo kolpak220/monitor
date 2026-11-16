@@ -11,7 +11,6 @@ from aiogram import Bot
 from aiogram.client.session.aiohttp import AiohttpSession
 from dotenv import dotenv_values
 from pyrogram import Client
-from pyrogram.errors import PhoneCodeExpired, PhoneCodeInvalid, RPCError, SessionPasswordNeeded
 
 ROOT = Path(__file__).resolve().parent
 ENV_FILE = ROOT / ".env"
@@ -24,54 +23,6 @@ def ask(label, key, saved, secret=False, default=""):
     entered = input(f"{label}{hint}: ").strip()
     return entered or value
 
-
-def code_type_name(value):
-    if value is None:
-        return None
-    return getattr(value, "__name__", type(value).__name__)
-
-
-def explain_code_delivery(sent):
-    delivery = code_type_name(sent.type)
-    descriptions = {
-        "SentCodeTypeApp": "Telegram app on another logged-in device",
-        "SentCodeTypeSms": "SMS text message",
-        "SentCodeTypeCall": "automated phone call",
-        "SentCodeTypeFlashCall": "flash-call verification",
-        "SentCodeTypeMissedCall": "missed-call verification",
-        "SentCodeTypeFragmentSms": "Fragment SMS",
-        "SentCodeTypeFirebaseSms": "SMS verification",
-        "SentCodeTypeEmailCode": "your configured login email",
-        "SentCodeTypeSetUpEmailRequired": "Telegram requires an email setup step",
-    }
-    print("\nTelegram accepted the login request.")
-    print("Requested delivery method: " + descriptions.get(delivery, delivery or "unknown"))
-    if delivery == "SentCodeTypeApp":
-        print("Important: this is Telegram's intended route, not proof the message was delivered.")
-        print("Check the verified Telegram service chat on every device where you're logged in.")
-    next_type = code_type_name(getattr(sent, "next_type", None))
-    if next_type:
-        print("Next available method: " + descriptions.get(next_type, next_type))
-        timeout = getattr(sent, "timeout", None)
-        if timeout:
-            print(f"Telegram says to wait approximately {timeout} seconds before requesting it.")
-    else:
-        print("Telegram did not provide another delivery method for this request.")
-    print("The code comes from Telegram itself, NOT from this bot.")
-    print("Do not guess the code or repeatedly request resends.\n")
-
-
-async def request_new_code(client, phone, phone_code_hash):
-    try:
-        return await client.resend_code(phone, phone_code_hash)
-    except RPCError as exc:
-        if getattr(exc, "ID", "") != "SEND_CODE_UNAVAILABLE":
-            raise
-        raise SystemExit(
-            "Telegram has no more code-delivery options available for this login attempt. "
-            "Stop retrying, check Telegram on an already logged-in device, wait before "
-            "starting a new login attempt, and do not keep requesting resends."
-        )
 
 
 async def main():
@@ -112,7 +63,8 @@ async def main():
         if username:
             proxy.update(username=username, password=password)
 
-    session = AiohttpSession(proxy=proxy_url) if proxy_url else AiohttpSession()
+    # Bot API traffic stays direct; the optional proxy is for the MTProto user client only.
+    session = AiohttpSession()
     bot = Bot(token=token, session=session)
     try:
         me = await bot.get_me()
@@ -121,41 +73,28 @@ async def main():
         await bot.session.close()
 
     session_file = DATA / "userbot.session"
-    reuse = session_file.exists() and input("Reuse saved Telegram user session? [Y/n]: ").strip().lower() not in {"n", "no"}
-    if not reuse:
-        client = Client("userbot", api_id=int(api_id), api_hash=api_hash, workdir=str(DATA), proxy=proxy)
-        connected = False
-        try:
-            await client.connect()
-            connected = True
-            sent = await client.send_code(phone)
-            explain_code_delivery(sent)
-            while True:
-                code = input("Code from Telegram (or 'resend'): ").strip()
-                if not code:
-                    print("Enter the code Telegram sent, or type 'resend'.")
-                    continue
-                if code.lower() == "resend":
-                    sent = await request_new_code(client, phone, sent.phone_code_hash)
-                    explain_code_delivery(sent)
-                    continue
-                try:
-                    await client.sign_in(phone, sent.phone_code_hash, code)
-                    break
-                except PhoneCodeInvalid:
-                    print("Telegram rejected that code. Check the latest message and try again.")
-                except PhoneCodeExpired:
-                    print("That code expired. Requesting a fresh one...")
-                    sent = await request_new_code(client, phone, sent.phone_code_hash)
-                    explain_code_delivery(sent)
-                except SessionPasswordNeeded:
-                    await client.check_password(input("Telegram two-step verification password: "))
-                    break
-            me = await client.get_me()
-            print(f"Authorized user account: @{me.username or me.id}")
-        finally:
-            if connected:
-                await client.disconnect()
+    if session_file.exists():
+        reuse = input("Reuse saved Telegram user session? [Y/n]: ").strip().lower() not in {"n", "no"}
+        if not reuse:
+            # Explicitly starting over: discard only this app's session file.
+            session_file.unlink()
+    client = Client(
+        "userbot",
+        api_id=int(api_id),
+        api_hash=api_hash,
+        workdir=str(DATA),
+        phone_number=phone,
+        proxy=proxy,
+    )
+    try:
+        # Same pattern as stars-screenshot: Pyrogram handles first-time login
+        # interactively and persists the authorized session for subsequent runs.
+        await client.start()
+        me = await client.get_me()
+        print(f"Authorized user account: @{me.username or me.id}")
+    finally:
+        if client.is_connected:
+            await client.stop()
 
     config = {
         "BOT_TOKEN": token, "TELEGRAM_API_ID": api_id, "TELEGRAM_API_HASH": api_hash,
