@@ -1,0 +1,74 @@
+name: telegram-username-monitor
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: monitor
+      POSTGRES_USER: monitor
+      POSTGRES_PASSWORD: monitor
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U monitor -d monitor"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+    networks:
+      - internal
+
+  setup:
+    build:
+      context: .
+    command: ["python", "-m", "monitor.setup"]
+    user: "0:0"
+    working_dir: /app
+    volumes:
+      - ./:/workspace
+      - ./data:/data
+    environment:
+      SETUP_ENV_PATH: /workspace/.env
+      SESSION_DIR: /data/sessions
+    profiles: ["setup"]
+    stdin_open: true
+    tty: true
+
+  bot:
+    build:
+      context: .
+    command: ["python", "-m", "monitor.bot"]
+    env_file:
+      - path: .env
+        required: false
+    volumes:
+      - ./data:/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - internal
+
+  userbot:
+    build:
+      context: .
+    command: ["python", "-m", "monitor.userbot"]
+    env_file:
+      - path: .env
+        required: false
+    volumes:
+      - ./data:/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - internal
+
+volumes:
+  postgres_data:
+
+networks:
+  internal:
+    driver: bridge
