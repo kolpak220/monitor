@@ -128,7 +128,7 @@ async def main():
                     print("Telegram rejected that code. Check the latest message and try again.")
                 except PhoneCodeExpired:
                     print("That code expired. Requesting a fresh one...")
-                    sent = await client.resend_code(phone, sent.phone_code_hash)
+                    sent = await request_new_code(client, phone, sent.phone_code_hash)
                     explain_code_delivery(sent)
                 except SessionPasswordNeeded:
                     await client.check_password(input("Telegram two-step verification password: "))
