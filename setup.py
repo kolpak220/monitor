@@ -5,6 +5,7 @@ import json
 import os
 import re
 from pathlib import Path
+from urllib.parse import quote
 
 from aiogram import Bot
 from aiogram.client.session.aiohttp import AiohttpSession
@@ -43,24 +44,24 @@ async def main():
     if not admin.isdigit():
         raise SystemExit("Telegram user ID must be numeric.")
 
-    kind = ask("Proxy type (none/socks5/http)", "PROXY_TYPE", saved, default="none").lower()
-    if kind not in {"none", "socks5", "http"}:
-        raise SystemExit("Proxy type must be none, socks5 or http.")
-    host = port = username = password = ""
-    proxy = None
-    if kind != "none":
-        host = ask("Proxy host", "PROXY_HOST", saved)
-        port = ask("Proxy port", "PROXY_PORT", saved)
-        username = ask("Proxy username (optional)", "PROXY_USERNAME", saved)
-        password = ask("Proxy password (optional)", "PROXY_PASSWORD", saved, True) if username else ""
-        if not host or not port.isdigit() or not 1 <= int(port) <= 65535:
-            raise SystemExit("Invalid proxy host or port.")
-        proxy = {"scheme": kind, "hostname": host, "port": int(port)}
-        if username:
-            proxy.update(username=username, password=password)
+    kind = ask("Proxy type (socks5/http)", "PROXY_TYPE", saved).lower()
+    if kind not in {"socks5", "http"}:
+        raise SystemExit("A proxy is required. Proxy type must be socks5 or http.")
+    host = ask("Proxy host", "PROXY_HOST", saved)
+    port = ask("Proxy port", "PROXY_PORT", saved)
+    username = ask("Proxy username (optional)", "PROXY_USERNAME", saved)
+    password = ask("Proxy password (optional)", "PROXY_PASSWORD", saved, True) if username else ""
+    if not host or not port.isdigit() or not 1 <= int(port) <= 65535:
+        raise SystemExit("Invalid proxy host or port.")
 
-    # Bot API traffic stays direct; the optional proxy is for the MTProto user client only.
-    session = AiohttpSession()
+    proxy = {"scheme": kind, "hostname": host, "port": int(port)}
+    if username:
+        proxy.update(username=username, password=password)
+    auth = f"{quote(username, safe='')}:{quote(password, safe='')}@" if username else ""
+    bot_api_proxy = f"{kind}://{auth}{host}:{port}"
+
+    # Both the Bot API and the MTProto user client must use the configured proxy.
+    session = AiohttpSession(proxy=bot_api_proxy)
     bot = Bot(token=token, session=session)
     try:
         me = await bot.get_me()
@@ -95,7 +96,7 @@ async def main():
     config = {
         "BOT_TOKEN": token, "TELEGRAM_API_ID": api_id, "TELEGRAM_API_HASH": api_hash,
         "PHONE_NUMBER": phone, "ADMIN_USER_IDS": admin,
-        "PROXY_TYPE": "" if kind == "none" else kind, "PROXY_HOST": host, "PROXY_PORT": port,
+        "PROXY_TYPE": kind, "PROXY_HOST": host, "PROXY_PORT": port,
         "PROXY_USERNAME": username, "PROXY_PASSWORD": password,
         "DEFAULT_INTERVAL_SECONDS": saved.get("DEFAULT_INTERVAL_SECONDS", "60"),
         "LOG_LEVEL": saved.get("LOG_LEVEL", "INFO"),
