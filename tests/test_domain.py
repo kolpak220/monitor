@@ -20,7 +20,7 @@ def test_normalize_username() -> None:
 
 @pytest.mark.parametrize(
     "value",
-    ["@alice", "ab", "bad-name", "1starts_with_digit", "name with space"],
+    ["@abcd", "ab", "bad-name", "1starts_with_digit", "name with space"],
 )
 def test_rejects_invalid_username(value: str) -> None:
     with pytest.raises(ValueError):
