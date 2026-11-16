@@ -1,5 +1,5 @@
 aiogram>=3.32,<4
-Kurigram==2.2.27
+Pyrogram==2.0.106
 tgcrypto>=1.2.5,<2
 aiohttp-socks>=0.10,<1
 python-dotenv>=1.1,<2
