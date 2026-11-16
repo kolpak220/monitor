@@ -1,1 +1,0 @@
-"""Telegram username monitoring application."""
