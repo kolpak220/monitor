@@ -127,7 +127,10 @@ async def _check_one(client, target_id: int, settings: Settings, registry, bot) 
                     target_id=target.id,
                     status=ResultStatus.ERROR.value,
                     method="worker",
-                    details=f"Unexpected {type(error).__name__}; retry scheduled in {delay} seconds.",
+                    details=(
+                        f"Unexpected {type(error).__name__}; "
+                        f"retry scheduled in {delay} seconds."
+                    ),
                     checked_at=checked_at,
                     duration_ms=int((time.monotonic() - started) * 1000),
                 )
