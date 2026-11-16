@@ -173,9 +173,9 @@ async def secondary_lookup(client, name, kind):
         return "inconclusive", "contacts.search", f"Secondary search failed ({type(exc).__name__})."
 
 
-def make_bot(token, proxy_url):
-    session = AiohttpSession(proxy=proxy_url) if proxy_url else AiohttpSession()
-    return Bot(token=token, session=session)
+def make_bot(token):
+    # Bot API traffic is direct. The optional proxy belongs to the MTProto client only.
+    return Bot(token=token, session=AiohttpSession())
 
 
 async def check_one(client, bot, target):
@@ -373,13 +373,13 @@ async def main():
     token, api_id, api_hash = env("BOT_TOKEN"), env("TELEGRAM_API_ID"), env("TELEGRAM_API_HASH")
     if not token or not api_id.isdigit() or not api_hash or not admins():
         raise RuntimeError("Configuration missing. Run python setup.py first.")
-    proxy_url, proxy = proxy_config()
+    _, proxy = proxy_config()
     if not (DATA / "userbot.session").exists():
         raise RuntimeError("Telegram user session missing. Run python setup.py first.")
     default_interval = max(10, int(env("DEFAULT_INTERVAL_SECONDS", "60")))
     init_database()
     user = Client("userbot", api_id=int(api_id), api_hash=api_hash, workdir=str(DATA), proxy=proxy)
-    bot = make_bot(token, proxy_url)
+    bot = make_bot(token)
     dp = Dispatcher()
     register_handlers(dp, default_interval)
     await user.start()
