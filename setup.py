@@ -5,7 +5,6 @@ import json
 import os
 import re
 from pathlib import Path
-from urllib.parse import quote
 
 from aiogram import Bot
 from aiogram.client.session.aiohttp import AiohttpSession
@@ -48,7 +47,6 @@ async def main():
     if kind not in {"none", "socks5", "http"}:
         raise SystemExit("Proxy type must be none, socks5 or http.")
     host = port = username = password = ""
-    proxy_url = None
     proxy = None
     if kind != "none":
         host = ask("Proxy host", "PROXY_HOST", saved)
@@ -57,8 +55,6 @@ async def main():
         password = ask("Proxy password (optional)", "PROXY_PASSWORD", saved, True) if username else ""
         if not host or not port.isdigit() or not 1 <= int(port) <= 65535:
             raise SystemExit("Invalid proxy host or port.")
-        auth = f"{quote(username, safe='')}:{quote(password, safe='')}@" if username else ""
-        proxy_url = f"{kind}://{auth}{host}:{port}"
         proxy = {"scheme": kind, "hostname": host, "port": int(port)}
         if username:
             proxy.update(username=username, password=password)
