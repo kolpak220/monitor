@@ -27,7 +27,7 @@ A proxy is required. The same SOCKS5 or HTTP proxy is used for all Telegram netw
 
 Monitors usernames for personal accounts, channels and supergroups. Default interval: 60 seconds per target. Results and the last 100 checks per target are stored in `data/monitor.sqlite3`. The bot sends notifications when a meaningful status changes and respects Telegram FloodWait responses.
 
-**Availability warning:** Telegram does not guarantee that a username can be registered. “Apparently available” is an indication from Telegram's resolver, not a promise that registration or assignment will succeed.
+**Availability warning:** Telegram does not guarantee that a username can be registered. “Apparently available” is an indication from Telegram's resolver, not a promise that registration or assignment will succeed. Auto-claim is opt-in per target and makes one attempt: it creates a channel titled with the username, then assigns the username. Another account may claim it first, Telegram may reject the assignment, and a failed assignment can leave an unassigned channel in your account. Re-arm with `/autoclaim @username` to try again.
 
 ## Commands
 
@@ -37,6 +37,8 @@ Monitors usernames for personal accounts, channels and supergroups. Default inte
 - `/list`
 - `/check @username`
 - `/pause @username` / `/resume @username`
+- `/autoclaim @username` — arm a one-shot attempt to create a channel titled with the username and assign it when Telegram reports it apparently available
+- `/stopclaim @username` — disable auto-claim
 - `/interval @username 60`
 - `/history @username [count]`
 - `/settings` / `/status`
