@@ -27,7 +27,8 @@ def _matches_target(response: Any, target_type: TargetType) -> tuple[bool, str]:
     if target_type == TargetType.USER:
         return matched_user, "Telegram resolved a user account." if matched_user else ""
     if target_type == TargetType.CHANNEL:
-        return matched_channel, "Telegram resolved a channel or supergroup." if matched_channel else ""
+        details = "Telegram resolved a channel or supergroup." if matched_channel else ""
+        return matched_channel, details
     if matched_user or matched_channel:
         kinds = []
         if matched_user:
