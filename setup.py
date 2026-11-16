@@ -36,13 +36,13 @@ def explain_code_delivery(sent):
         "SentCodeTypeFragmentSms": "Fragment SMS",
         "SentCodeTypeFirebaseSms": "SMS verification",
     }
-    print("\\nTelegram accepted the login request.")
+    print("\nTelegram accepted the login request.")
     print("Code delivery: " + descriptions.get(delivery, delivery))
     if getattr(sent, "next_type", None):
         print("Telegram may offer another delivery method after the current attempt.")
     print("The code comes from Telegram itself, NOT from this bot.")
     print("If no code arrives, check Telegram's service messages on your other devices.")
-    print("You can type 'resend' at the code prompt to request another code.\\n")
+    print("You can type 'resend' at the code prompt to request another code.\n")
 
 
 async def main():
