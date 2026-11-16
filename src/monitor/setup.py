@@ -8,6 +8,8 @@ import sys
 from pathlib import Path
 from urllib.parse import quote
 
+from dotenv import dotenv_values
+
 from aiogram import Bot
 from aiogram.client.session.aiohttp import AiohttpSession
 from pyrogram import Client
@@ -23,8 +25,10 @@ def ask(prompt: str, default: str = "") -> str:
     return value or default
 
 
-def ask_secret(prompt: str) -> str:
-    return input(f"{prompt}: ").strip()
+def ask_secret(prompt: str, default: str = "") -> str:
+    suffix = " [saved]" if default else ""
+    value = input(f"{prompt}{suffix}: ").strip()
+    return value or default
 
 
 def _dotenv_value(value: str) -> str:
@@ -104,32 +108,44 @@ async def main() -> None:
             "Run with docker compose --profile setup run --rm -it setup."
         )
 
-    if ENV_PATH.exists():
-        replace = ask("An .env file already exists. Replace it? (y/N)", "N").lower()
-        if replace not in {"y", "yes"}:
-            print("Existing configuration left unchanged.")
-            return
+    existing = {
+        key: str(value)
+        for key, value in dotenv_values(ENV_PATH).items()
+        if value is not None
+    } if ENV_PATH.exists() else {}
 
-    api_id_raw = ask("Telegram API ID")
+    if existing:
+        print("Existing .env found. Press Enter to keep each saved value, or type a new value.")
+    else:
+        print("No existing .env found. Enter your configuration below.")
+
+    api_id_raw = ask("Telegram API ID", existing.get("TELEGRAM_API_ID", ""))
     if not api_id_raw.isdigit():
         raise ValueError("Telegram API ID must be numeric.")
     api_id = int(api_id_raw)
-    api_hash = ask_secret("Telegram API hash")
+    api_hash = ask_secret("Telegram API hash", existing.get("TELEGRAM_API_HASH", ""))
     if not api_hash:
         raise ValueError("Telegram API hash cannot be empty.")
-    phone = re.sub(r"\s+", "", ask("Phone number, including country code"))
+    phone = re.sub(
+        r"\s+",
+        "",
+        ask("Phone number, including country code", existing.get("PHONE_NUMBER", "")),
+    )
     if not re.fullmatch(r"\+?[0-9]{7,16}", phone):
         raise ValueError("Enter a valid phone number with country code.")
 
-    bot_token = ask_secret("Bot token from BotFather")
+    bot_token = ask_secret("Bot token from BotFather", existing.get("BOT_TOKEN", ""))
     if not re.fullmatch(r"[0-9]+:[A-Za-z0-9_-]{20,}", bot_token):
         raise ValueError("Bot token does not look valid.")
 
-    admin_ids_raw = ask("Your numeric Telegram user ID")
+    admin_ids_raw = ask("Your numeric Telegram user ID", existing.get("ADMIN_USER_IDS", ""))
     if not admin_ids_raw.isdigit():
         raise ValueError("Administrator ID must be numeric.")
 
-    proxy_type = ask("Shared proxy type (none/socks5/http)", "none").lower()
+    proxy_type = ask(
+        "Shared proxy type (none/socks5/http)",
+        existing.get("PROXY_TYPE", "") or "none",
+    ).lower()
     if proxy_type not in {"none", "socks5", "http"}:
         raise ValueError("Proxy type must be none, socks5 or http.")
 
@@ -141,15 +157,22 @@ async def main() -> None:
     proxy_password = ""
     if proxy_type != "none":
         proxy_kind = proxy_type
-        proxy_host = ask("Proxy host")
+        proxy_host = ask("Proxy host", existing.get("PROXY_HOST", ""))
         if not proxy_host:
             raise ValueError("Proxy host cannot be empty.")
-        proxy_port_raw = ask("Proxy port")
+        proxy_port_raw = ask("Proxy port", existing.get("PROXY_PORT", ""))
         if not proxy_port_raw.isdigit() or not (1 <= int(proxy_port_raw) <= 65535):
             raise ValueError("Proxy port must be between 1 and 65535.")
         proxy_port = int(proxy_port_raw)
-        proxy_username = ask("Proxy username (leave empty if not required)")
-        proxy_password = ask_secret("Proxy password") if proxy_username else ""
+        proxy_username = ask(
+            "Proxy username (leave empty if not required)",
+            existing.get("PROXY_USERNAME", ""),
+        )
+        proxy_password = (
+            ask_secret("Proxy password", existing.get("PROXY_PASSWORD", ""))
+            if proxy_username
+            else ""
+        )
         proxy = {
             "scheme": proxy_kind,
             "hostname": proxy_host,
@@ -192,12 +215,14 @@ async def main() -> None:
         "PROXY_PORT": str(proxy_port) if proxy_kind else "",
         "PROXY_USERNAME": proxy_username,
         "PROXY_PASSWORD": proxy_password,
-        "DATABASE_URL": "postgresql+asyncpg://monitor:monitor@postgres:5432/monitor",
-        "DEFAULT_INTERVAL_SECONDS": "60",
-        "CHECK_POLL_SECONDS": "3",
-        "CHECK_CONCURRENCY": "1",
-        "NOTIFICATION_ENABLED": "true",
-        "LOG_LEVEL": "INFO",
+        "DATABASE_URL": existing.get(
+            "DATABASE_URL", "postgresql+asyncpg://monitor:monitor@postgres:5432/monitor"
+        ),
+        "DEFAULT_INTERVAL_SECONDS": existing.get("DEFAULT_INTERVAL_SECONDS", "60"),
+        "CHECK_POLL_SECONDS": existing.get("CHECK_POLL_SECONDS", "3"),
+        "CHECK_CONCURRENCY": existing.get("CHECK_CONCURRENCY", "1"),
+        "NOTIFICATION_ENABLED": existing.get("NOTIFICATION_ENABLED", "true"),
+        "LOG_LEVEL": existing.get("LOG_LEVEL", "INFO"),
     }
     ENV_PATH.parent.mkdir(parents=True, exist_ok=True)
     temporary = ENV_PATH.with_name(ENV_PATH.name + ".tmp")
