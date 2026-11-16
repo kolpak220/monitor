@@ -7,6 +7,8 @@ A single-process local Python app. **No Docker, PostgreSQL, Redis, Alembic, or c
 Install Python 3.13 and run in PowerShell from this folder. The project uses official Pyrogram (not Kurigram).
 
 ~~~powershell
+if (Get-Command deactivate -ErrorAction SilentlyContinue) { deactivate }
+if (Test-Path .venv) { Remove-Item -Recurse -Force .venv }
 py -3.13 -m venv .venv
 .\\.venv\\Scripts\\Activate.ps1
 python -m pip install --upgrade pip
