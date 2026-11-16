@@ -7,6 +7,7 @@ import re
 import sqlite3
 import time
 from contextlib import contextmanager
+from urllib.parse import quote
 from pathlib import Path
 
 from aiogram import Bot, Dispatcher
@@ -42,10 +43,8 @@ def admins():
 
 def proxy_config():
     kind = env("PROXY_TYPE").lower()
-    if not kind:
-        return None, None
     if kind not in {"socks5", "http"}:
-        raise RuntimeError("PROXY_TYPE must be socks5, http or empty.")
+        raise RuntimeError("A proxy is required. PROXY_TYPE must be socks5 or http.")
     host, port = env("PROXY_HOST"), env("PROXY_PORT")
     if not host or not port.isdigit() or not 1 <= int(port) <= 65535:
         raise RuntimeError("Invalid PROXY_HOST/PROXY_PORT.")
@@ -53,7 +52,9 @@ def proxy_config():
     raw = {"scheme": kind, "hostname": host, "port": int(port)}
     if user:
         raw.update(username=user, password=password)
-    return raw
+    auth = f"{quote(user, safe='')}:{quote(password, safe='')}@" if user else ""
+    bot_api_proxy = f"{kind}://{auth}{host}:{port}"
+    return raw, bot_api_proxy
 
 
 @contextmanager
@@ -170,9 +171,8 @@ async def secondary_lookup(client, name, kind):
         return "inconclusive", "contacts.search", f"Secondary search failed ({type(exc).__name__})."
 
 
-def make_bot(token):
-    # Bot API traffic is direct. The optional proxy belongs to the MTProto client only.
-    return Bot(token=token, session=AiohttpSession())
+def make_bot(token, proxy_url):
+    return Bot(token=token, session=AiohttpSession(proxy=proxy_url))
 
 
 async def check_one(client, bot, target):
@@ -370,13 +370,13 @@ async def main():
     token, api_id, api_hash = env("BOT_TOKEN"), env("TELEGRAM_API_ID"), env("TELEGRAM_API_HASH")
     if not token or not api_id.isdigit() or not api_hash or not admins():
         raise RuntimeError("Configuration missing. Run python setup.py first.")
-    proxy = proxy_config()
+    proxy, bot_api_proxy = proxy_config()
     if not (DATA / "userbot.session").exists():
         raise RuntimeError("Telegram user session missing. Run python setup.py first.")
     default_interval = max(10, int(env("DEFAULT_INTERVAL_SECONDS", "60")))
     init_database()
     user = Client("userbot", api_id=int(api_id), api_hash=api_hash, workdir=str(DATA), proxy=proxy)
-    bot = make_bot(token)
+    bot = make_bot(token, bot_api_proxy)
     dp = Dispatcher()
     register_handlers(dp, default_interval)
     await user.start()
