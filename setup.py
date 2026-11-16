@@ -24,10 +24,14 @@ def ask(label, key, saved, secret=False, default=""):
     return entered or value
 
 
-
 async def main():
     DATA.mkdir(exist_ok=True)
-    saved = {k: str(v) for k, v in dotenv_values(ENV_FILE).items() if v is not None} if ENV_FILE.exists() else {}
+    saved = (
+        {k: str(v) for k, v in dotenv_values(ENV_FILE).items() if v is not None}
+        if ENV_FILE.exists()
+        else {}
+    )
+
     print("\nTelegram Username Monitor — local setup")
     print(f".env: {ENV_FILE}")
     print("Press Enter to reuse saved values.\n" if saved else "Enter your Telegram credentials.\n")
@@ -37,6 +41,7 @@ async def main():
     phone = re.sub(r"\s+", "", ask("Phone number (+country code)", "PHONE_NUMBER", saved))
     token = ask("Bot token", "BOT_TOKEN", saved, True)
     admin = ask("Your numeric Telegram user ID", "ADMIN_USER_IDS", saved)
+
     if not api_id.isdigit() or not api_hash or not re.fullmatch(r"\+?[0-9]{7,16}", phone):
         raise SystemExit("Invalid API ID/hash or phone number.")
     if not re.fullmatch(r"[0-9]+:[A-Za-z0-9_-]{20,}", token):
@@ -51,16 +56,18 @@ async def main():
     port = ask("Proxy port", "PROXY_PORT", saved)
     username = ask("Proxy username (optional)", "PROXY_USERNAME", saved)
     password = ask("Proxy password (optional)", "PROXY_PASSWORD", saved, True) if username else ""
+
     if not host or not port.isdigit() or not 1 <= int(port) <= 65535:
         raise SystemExit("Invalid proxy host or port.")
 
     proxy = {"scheme": kind, "hostname": host, "port": int(port)}
     if username:
         proxy.update(username=username, password=password)
+
     auth = f"{quote(username, safe='')}:{quote(password, safe='')}@" if username else ""
     bot_api_proxy = f"{kind}://{auth}{host}:{port}"
 
-    # Both the Bot API and the MTProto user client must use the configured proxy.
+    # Validate the Bot API token through the same configured proxy.
     session = AiohttpSession(proxy=bot_api_proxy)
     bot = Bot(token=token, session=session)
     try:
@@ -69,43 +76,43 @@ async def main():
     finally:
         await bot.session.close()
 
-    session_file = DATA / "userbot.session"
-    if session_file.exists():
-        reuse = input("Reuse saved Telegram user session? [Y/n]: ").strip().lower() not in {"n", "no"}
-        if not reuse:
-            # Explicitly starting over: discard only this app's session file.
-            session_file.unlink()
-    client = Client(
+    # Save settings before MTProto login, so a failed/interrupted login does
+    # not make the user enter credentials and proxy details again next time.
+    config = {
+        "BOT_TOKEN": token,
+        "TELEGRAM_API_ID": api_id,
+        "TELEGRAM_API_HASH": api_hash,
+        "PHONE_NUMBER": phone,
+        "ADMIN_USER_IDS": admin,
+        "PROXY_TYPE": kind,
+        "PROXY_HOST": host,
+        "PROXY_PORT": port,
+        "PROXY_USERNAME": username,
+        "PROXY_PASSWORD": password,
+        "DEFAULT_INTERVAL_SECONDS": saved.get("DEFAULT_INTERVAL_SECONDS", "60"),
+        "LOG_LEVEL": saved.get("LOG_LEVEL", "INFO"),
+    }
+    tmp = ENV_FILE.with_name(".env.tmp")
+    tmp.write_text(
+        "# Local credentials; never commit this file.\n"
+        + "".join(f"{key}={json.dumps(value, ensure_ascii=False)}\n" for key, value in config.items()),
+        encoding="utf-8",
+    )
+    os.replace(tmp, ENV_FILE)
+
+    # Keep Pyrogram's own login flow untouched, just like stars-screenshot.
+    # Pyrogram handles code delivery, code entry, 2FA and session persistence.
+    async with Client(
         "userbot",
         api_id=int(api_id),
         api_hash=api_hash,
         workdir=str(DATA),
         phone_number=phone,
         proxy=proxy,
-    )
-    try:
-        # Same pattern as stars-screenshot: Pyrogram handles first-time login
-        # interactively and persists the authorized session for subsequent runs.
-        await client.start()
-        me = await client.get_me()
+    ) as app:
+        me = await app.get_me()
         print(f"Authorized user account: @{me.username or me.id}")
-    finally:
-        if client.is_connected:
-            await client.stop()
 
-    config = {
-        "BOT_TOKEN": token, "TELEGRAM_API_ID": api_id, "TELEGRAM_API_HASH": api_hash,
-        "PHONE_NUMBER": phone, "ADMIN_USER_IDS": admin,
-        "PROXY_TYPE": kind, "PROXY_HOST": host, "PROXY_PORT": port,
-        "PROXY_USERNAME": username, "PROXY_PASSWORD": password,
-        "DEFAULT_INTERVAL_SECONDS": saved.get("DEFAULT_INTERVAL_SECONDS", "60"),
-        "LOG_LEVEL": saved.get("LOG_LEVEL", "INFO"),
-    }
-    tmp = ENV_FILE.with_name(".env.tmp")
-    tmp.write_text("# Local credentials; never commit this file.\n" +
-                   "".join(f"{k}={json.dumps(v, ensure_ascii=False)}\n" for k, v in config.items()),
-                   encoding="utf-8")
-    os.replace(tmp, ENV_FILE)
     print(f"\nSaved {ENV_FILE}")
     print(f"SQLite database: {DATA / 'monitor.sqlite3'}")
     print("Start with: python main.py")
