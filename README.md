@@ -19,9 +19,9 @@ python main.py
 
 **Pyrogram compatibility note:** this project intentionally uses official Pyrogram 2.0.106. The upstream project is archived and no longer maintained, so Telegram API changes may eventually break login or MTProto requests.
 
-The setup wizard creates `.env`, validates the bot token directly (without the MTProto proxy), and starts the Pyrogram user client. On the first run, Pyrogram handles Telegram's interactive phone/code/two-step-password login and saves `data/userbot.session`. On later runs, press Enter to reuse that session. Keep the terminal open; stop with Ctrl+C and restart with `python main.py`.
+The setup wizard creates `.env`, validates the bot token through the configured proxy, and starts the Pyrogram user client through that same proxy. On the first run, Pyrogram handles Telegram's interactive phone/code/two-step-password login and saves `data/userbot.session`. On later runs, press Enter to reuse that session. Keep the terminal open; stop with Ctrl+C and restart with `python main.py`.
 
-The optional proxy is applied only to the Pyrogram MTProto user client. Bot API polling and token validation connect directly. This matches the separation used by the reference project.
+A proxy is required. The same SOCKS5 or HTTP proxy is used for all Telegram network traffic: Bot API validation, bot polling, commands, notifications, and the Pyrogram MTProto user client. The `aiohttp-socks` dependency enables proxy support in aiogram.
 
 ## What it does
 
@@ -49,4 +49,4 @@ Only the numeric ID in `ADMIN_USER_IDS` can use the bot. Open the bot and send `
 - `data/userbot.session`: logged-in Telegram session; treat it like a password.
 - `data/monitor.sqlite3`: SQLite database; back up this file to preserve targets and history.
 
-Optional proxy supports SOCKS5 or HTTP for the MTProto user client only. The Bot API connects directly. Leave proxy type as `none` to connect directly.
+The proxy is mandatory and supports SOCKS5 or HTTP. All Telegram traffic uses it; there is no direct-connection fallback.
